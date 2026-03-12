@@ -1,18 +1,3 @@
-"""
-Phase 1 + 2: API Client, Logging & Incremental Load
-=====================================================
-api_client.py
-
-ITEMS YOU MUST SUPPLY (search for "# >>> CONFIGURE"):
-  1. BASE_URL        - The base URL of your running API server
-  2. LOG_FILE_PATH   - Where you want the pipeline.log file written
-  3. REQUEST_TIMEOUT - How many seconds before an HTTP request times out
-  4. MAX_RETRIES     - How many times to retry a failed request
-  5. RETRY_BACKOFF   - Seconds to wait between retries (doubles each attempt)
-  6. WATERMARK_FILE  - Path to the watermark.txt file
-  7. DB connection   - Configured in db_setup.py
-"""
-
 import logging
 from datetime import datetime, date
 from logging.handlers import RotatingFileHandler
@@ -26,9 +11,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from db_setup import get_engine, patients_table, encounters_table, observations_table
 
 
-# =============================================================================
+
 # >>> CONFIGURE: Set these values before running
-# =============================================================================
 
 BASE_URL        = "http://127.0.0.1:8000"  # >>> CONFIGURE: Base URL of your API
 LOG_FILE_PATH   = "pipeline.log"            # >>> CONFIGURE: Path for the log file
@@ -37,12 +21,9 @@ MAX_RETRIES     = 3                         # >>> CONFIGURE: Max retry attempts
 RETRY_BACKOFF   = 1.0                       # >>> CONFIGURE: Seconds between retries
 WATERMARK_FILE  = "watermark.txt"          # >>> CONFIGURE: Path to watermark file
 
-# =============================================================================
 
 
-# -----------------------------------------------------------------------------
 # Logging Setup
-# -----------------------------------------------------------------------------
 
 def setup_logging(log_file: str = LOG_FILE_PATH) -> logging.Logger:
     """
@@ -74,18 +55,8 @@ def setup_logging(log_file: str = LOG_FILE_PATH) -> logging.Logger:
     return logger
 
 
-# -----------------------------------------------------------------------------
-# Watermark Helpers (Phase 2 - Incremental Load)
-# -----------------------------------------------------------------------------
 
 def read_watermark(filepath: str = WATERMARK_FILE) -> str | None:
-    """
-    Read the last successful run date from watermark.txt.
-
-    Returns:
-        ISO date string "YYYY-MM-DD" if file exists and has content.
-        None if file is missing or empty — triggers a full load.
-    """
     logger = logging.getLogger("pipeline")
     path = Path(filepath)
 
@@ -103,33 +74,15 @@ def read_watermark(filepath: str = WATERMARK_FILE) -> str | None:
 
 
 def write_watermark(run_date: str, filepath: str = WATERMARK_FILE) -> None:
-    """
-    Write today's date to watermark.txt after successful pipeline completion.
-    Only called on success — a failed run will not advance the watermark.
-
-    Args:
-        run_date : ISO date string "YYYY-MM-DD"
-        filepath : path to watermark file
-    """
     logger = logging.getLogger("pipeline")
     Path(filepath).write_text(run_date)
     logger.info("Watermark updated | new_watermark=%s | file=%s", run_date, filepath)
 
 
-# -----------------------------------------------------------------------------
 # API Client (Phase 1)
-# -----------------------------------------------------------------------------
 
 class HealthcareAPIClient:
-    """
-    Object-oriented HTTP client for the Healthcare Data API.
-
-    - Manages a persistent requests.Session with retry logic.
-    - Provides generator-based pagination so pages are never all in memory.
-    - Logs every request, page summary, and error via the pipeline logger.
-    """
-
-    def __init__(
+    def __init__(   
         self,
         base_url: str = BASE_URL,
         timeout: int = REQUEST_TIMEOUT,
@@ -181,10 +134,6 @@ class HealthcareAPIClient:
         return response.json()
 
     def _paginate(self, endpoint: str, base_params: dict, page_limit: int):
-        """
-        Generic generator that walks all pages of any endpoint.
-        Yields one page (list of dicts) at a time — never loads all pages at once.
-        """
         skip = 0
         total_fetched = 0
 
@@ -230,14 +179,6 @@ class HealthcareAPIClient:
         start_date: str | None = None,
         page_limit: int = 100,
     ):
-        """
-        Generator — yields one page of encounter records at a time.
-
-        Args:
-            patient_id  : optional filter to a single patient
-            start_date  : ISO date "YYYY-MM-DD" — used for incremental loads
-                          (read from watermark.txt via read_watermark())
-        """
         params: dict = {}
         if patient_id is not None:
             params["patient_id"] = patient_id
@@ -272,16 +213,9 @@ class HealthcareAPIClient:
         self.logger.info("Extraction complete | endpoint=/observations")
 
 
-# -----------------------------------------------------------------------------
-# Database Load Helpers (Phase 2)
-# -----------------------------------------------------------------------------
+# Database Load
 
 def load_patients(engine, pages) -> int:
-    """
-    Upsert patient records into the patients table.
-    ON CONFLICT DO NOTHING — safe to re-run without creating duplicates.
-    Returns total records processed.
-    """
     logger = logging.getLogger("pipeline")
     total = 0
     with engine.begin() as conn:
@@ -297,11 +231,6 @@ def load_patients(engine, pages) -> int:
 
 
 def load_encounters(engine, pages) -> int:
-    """
-    Upsert encounter records into the encounters table.
-    ON CONFLICT DO NOTHING — safe for both full and incremental loads.
-    Returns total records processed.
-    """
     logger = logging.getLogger("pipeline")
     total = 0
     with engine.begin() as conn:
@@ -317,11 +246,6 @@ def load_encounters(engine, pages) -> int:
 
 
 def load_observations(engine, pages) -> int:
-    """
-    Upsert observation records into the observations table.
-    ON CONFLICT DO NOTHING — safe to re-run.
-    Returns total records processed.
-    """
     logger = logging.getLogger("pipeline")
     total = 0
     with engine.begin() as conn:
@@ -336,9 +260,7 @@ def load_observations(engine, pages) -> int:
     return total
 
 
-# =============================================================================
 # Entry point — full pipeline run
-# =============================================================================
 
 if __name__ == "__main__":
     logger = setup_logging()
