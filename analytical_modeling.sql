@@ -10,7 +10,7 @@ SELECT
     prev_discharge_date,
     days_since_last_discharge
     CASE 
-        WHEN days_since_last_discharge >= 30 THEN TRUE
+        WHEN days_since_last_discharge <= 30 THEN TRUE
         ELSE FALSE
     END AS readmission_risk
 FROM
@@ -27,7 +27,7 @@ FROM
             PARTITION BY patient_id
             ORDER BY admission_date)
         AS days_since_last_discharge
-    FROM encounters) dishcarge_caculations
+    FROM encounters) dishcarge_calculations
 WHERE prev_discharge_date IS NOT NULL
 ORDER BY patient_id, admission_date;
 
@@ -52,8 +52,6 @@ WHERE recent_observations = 1
 
 
 -- Model 3: Facility Diagnosis Aggregation
---Logic: Write a query using `JOIN` and `GROUP BY` to output the total number of distinct 
---patients and the most frequent diagnosis code per `facility_id`.
 
 SELECT
     e.facility_id,

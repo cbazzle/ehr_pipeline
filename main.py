@@ -1,5 +1,4 @@
 from typing import Optional
-
 from data_generator import db
 from fastapi import FastAPI, Query
 
